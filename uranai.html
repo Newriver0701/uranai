@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>占いリール — 動画エクスポート</title>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@700;800&family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --gold: #F5C842; --rose: #FF6B9D; --violet: #9B5CF6;
+    --deep: #0D0A1E; --card: rgba(255,255,255,0.04); --border: rgba(255,255,255,0.08);
+  }
+  body {
+    background: var(--deep); color: #fff;
+    font-family: 'Noto Sans JP', sans-serif;
+    min-height: 100vh; overflow-x: hidden;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 15% 15%, rgba(155,92,246,0.18) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 85% 85%, rgba(255,107,157,0.15) 0%, transparent 60%);
+  }
+  .wrap { position: relative; z-index: 1; max-width: 460px; margin: 0 auto; padding: 28px 16px 60px; }
+  header { text-align: center; margin-bottom: 28px; }
+  .eyebrow { font-size: 10px; letter-spacing: 0.5em; color: rgba(245,200,66,0.5); margin-bottom: 8px; }
+  h1 {
+    font-family: 'Shippori Mincho', serif; font-size: 22px; font-weight: 800;
+    background: linear-gradient(135deg, #F5C842 0%, #FF6B9D 50%, #9B5CF6 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    letter-spacing: 0.08em; line-height: 1.4;
+  }
+  #loader {
+    background: rgba(13,10,30,0.95); border: 1px solid var(--border);
+    border-radius: 20px; padding: 32px 24px; text-align: center; margin-bottom: 24px;
+  }
+  .loader-icon { font-size: 36px; margin-bottom: 12px; animation: spin 2s linear infinite; display: inline-block; }
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  .loader-text { font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.8; }
+  .loader-bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; margin-top: 16px; overflow: hidden; }
+  .loader-fill { height: 100%; background: linear-gradient(90deg, #9B5CF6, #FF6B9D); border-radius: 2px; width: 0%; transition: width 0.3s; }
+  #mainUI { display: none; }
+  .tabs { display: flex; background: rgba(255,255,255,0.04); border-radius: 50px; padding: 4px; margin-bottom: 20px; border: 1px solid var(--border); gap: 3px; }
+  .tab {
+    flex: 1; padding: 9px 4px; border: none; border-radius: 50px;
+    font-family: 'Noto Sans JP', sans-serif; font-size: 11px; font-weight: 700;
+    cursor: pointer; transition: all 0.3s; color: rgba(255,255,255,0.35); background: transparent; letter-spacing: 0.03em;
+  }
+  .tab.active { background: linear-gradient(135deg, rgba(155,92,246,0.7), rgba(255,107,157,0.5)); color: #fff; box-shadow: 0 0 16px rgba(155,92,246,0.3); }
+  .reel-wrap {
+    background: var(--card); border: 1px solid var(--border); border-radius: 20px;
+    overflow: hidden; display: flex; justify-content: center; align-items: center;
+    margin-bottom: 16px; aspect-ratio: 9/16; max-height: 440px; position: relative;
+  }
+  .reel-wrap canvas { width: 100% !important; height: 100% !important; display: block; }
+  .controls { display: flex; flex-direction: column; gap: 10px; }
+  .btn-row { display: flex; gap: 10px; }
+  .btn {
+    flex: 1; padding: 13px 8px; border: none; border-radius: 14px;
+    font-family: 'Noto Sans JP', sans-serif; font-size: 12px; font-weight: 700;
+    cursor: pointer; letter-spacing: 0.06em; transition: all 0.3s;
+  }
+  .btn-primary { background: linear-gradient(135deg, #9B5CF6, #FF6B9D); color: #fff; box-shadow: 0 0 20px rgba(155,92,246,0.35); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-export { background: linear-gradient(135deg, #F5C842, #F59E0B); color: #0D0A1E; box-shadow: 0 0 20px rgba(245,200,66,0.3); }
+  .btn-export:disabled { opacity: 0.4; cursor: not-allowed; }
+  .progress { height: 3px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, #9B5CF6, #FF6B9D, #F5C842); border-radius: 2px; width: 0%; transition: width 0.15s linear; }
+  .status-bar {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    border-radius: 12px; padding: 11px 16px; font-size: 12px; color: rgba(255,255,255,0.5);
+    text-align: center; letter-spacing: 0.04em; min-height: 40px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .status-bar.rec { color: #FF6B9D; border-color: rgba(255,107,157,0.4); animation: blink 1s ease-in-out infinite; }
+  .status-bar.done { color: #34D399; border-color: rgba(52,211,153,0.4); }
+  .status-bar.err { color: #f87171; border-color: rgba(248,113,113,0.4); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.5} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">✦ URANAI PLATFORM ✦</div>
+    <h1>神秘の占いリール<br>動画エクスポーター</h1>
+  </header>
+  <div id="loader">
+    <div class="loader-icon">⚙️</div>
+    <div class="loader-text" id="loaderText">FFmpeg を読み込み中...<br>初回のみ少し時間がかかります</div>
+    <div class="loader-bar"><div class="loader-fill" id="loaderFill"></div></div>
+  </div>
+  <div id="mainUI">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('roulette')">ルーレット</button>
+      <button class="tab" onclick="switchTab('number')">ラッキーナンバー</button>
+      <button class="tab" onclick="switchTab('tarot')">タロット</button>
+    </div>
+    <div class="reel-wrap">
+      <canvas id="reelCanvas" width="405" height="720"></canvas>
+    </div>
+    <div class="controls">
+      <div class="btn-row">
+        <button class="btn btn-primary" id="playBtn" onclick="playAnim()">▶ プレビュー</button>
+        <button class="btn btn-export" id="exportBtn" onclick="exportVideo()" disabled>⬇ 動画を保存</button>
+      </div>
+      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="status-bar" id="statusBar">プレビューを再生してください</div>
+    </div>
+  </div>
+</div>
+<script type="module">
+import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/esm/index.js';
+import { toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
+const ffmpeg = new FFmpeg();
+let ffmpegReady = false;
+async function loadFFmpeg() {
+  const fill = document.getElementById('loaderFill');
+  const text = document.getElementById('loaderText');
+  try {
+    const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/esm';
+    ffmpeg.on('progress', ({ progress }) => { fill.style.width = (progress * 100) + '%'; });
+    fill.style.width = '20%';
+    text.innerHTML = 'コアファイルをダウンロード中...<br>しばらくお待ちください';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    fill.style.width = '100%';
+    ffmpegReady = true;
+    setTimeout(() => {
+      document.getElementById('loader').style.display = 'none';
+      document.getElementById('mainUI').style.display = 'block';
+      drawIdle(); setStatus('準備完了 ✦ プレビューを再生してください');
+    }, 400);
+  } catch(e) {
+    text.innerHTML = '読み込みに失敗しました。<br>ネットワークを確認して再読み込みしてください。';
+    document.getElementById('loader').querySelector('.loader-icon').textContent = '❌';
+  }
+}
+loadFFmpeg();
+const W=405,H=720;
+const ITEMS=[{label:'大吉',color:'#FFD700'},{label:'縁結び',color:'#FF6B9D'},{label:'金運UP',color:'#00D4AA'},{label:'吉',color:'#818CF8'},{label:'恋愛成就',color:'#FF4785'},{label:'中吉',color:'#F59E0B'},{label:'仕事運',color:'#38BDF8'},{label:'末吉',color:'#A78BFA'}];
+const LUCKY=[1,2,3,5,7,8,11,13,15,17,21,22,23,25,27,33,44,55,66,77,88,99];
+const TAROT=[{name:'愚者',en:'THE FOOL',emoji:'🌟',meaning:'新しい始まり・無限の可能性',color:'#FFD700'},{name:'魔術師',en:'THE MAGICIAN',emoji:'✨',meaning:'意志の力・創造の始まり',color:'#FF6B6B'},{name:'女教皇',en:'HIGH PRIESTESS',emoji:'🌙',meaning:'直感・神秘的な知恵',color:'#C084FC'},{name:'女帝',en:'THE EMPRESS',emoji:'🌸',meaning:'豊かさ・愛・母なる力',color:'#F472B6'},{name:'恋人',en:'THE LOVERS',emoji:'💫',meaning:'愛の選択・深い絆',color:'#FB7185'},{name:'運命の輪',en:'WHEEL OF FORTUNE',emoji:'🎡',meaning:'転換期・運命の流れ',color:'#818CF8'},{name:'星',en:'THE STAR',emoji:'⭐',meaning:'希望・再生・明るい未来',color:'#38BDF8'},{name:'月',en:'THE MOON',emoji:'🌕',meaning:'潜在意識・隠された真実',color:'#A78BFA'}];
+const canvas=document.getElementById('reelCanvas');
+const ctx=canvas.getContext('2d');
+let currentTab='roulette',animFrame=null,isPlaying=false,animStartTime=null;
+const ANIM_DURATION=4000,FPS=30;
+let wheelTarget=0,wheelResult=null,numberPicks=[],tarotCard=null;
+function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
+function drawBg(){ctx.fillStyle='#0D0A1E';ctx.fillRect(0,0,W,H);for(let i=0;i<60;i++){const x=(Math.sin(i*137.5)*0.5+0.5)*W,y=(Math.cos(i*97.3)*0.5+0.5)*H;ctx.beginPath();ctx.arc(x,y,Math.sin(i)*0.8+1,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${0.15+Math.sin(i)*0.1})`;ctx.fill();}}
+function txt(t,x,y,sz,col,align='center'){ctx.save();ctx.font=`900 ${sz}px 'Noto Sans JP',sans-serif`;ctx.fillStyle=col;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(t,x,y);ctx.restore();}
+function gtxt(t,x,y,sz,col){ctx.save();ctx.shadowColor=col;ctx.shadowBlur=20;txt(t,x,y,sz,col);ctx.restore();}
+function drawHeader(sub){txt('✦  URANAI  ✦',W/2,44,10,'rgba(245,200,66,0.5)');gtxt('神秘の占い',W/2,84,26,'#fff');txt(sub,W/2,116,12,'rgba(255,255,255,0.4)');}
+function drawFooter(){txt('あなたの運命が今、動き出す',W/2,H-56,12,'rgba(255,255,255,0.35)');txt('✦',W/2,H-28,14,'rgba(155,92,246,0.5)');}
+function drawWheel(angle){const cx=W/2,cy=H/2-10,R=148,sa=(2*Math.PI)/ITEMS.length;ctx.save();ctx.shadowColor='#9B5CF6';ctx.shadowBlur=24;ctx.beginPath();ctx.arc(cx,cy,R+6,0,Math.PI*2);ctx.strokeStyle='rgba(155,92,246,0.25)';ctx.lineWidth=4;ctx.stroke();ctx.restore();ITEMS.forEach((item,i)=>{const s=angle+i*sa,e=s+sa;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R,s,e);ctx.closePath();ctx.fillStyle=item.color;ctx.fill();ctx.strokeStyle='rgba(13,10,30,0.8)';ctx.lineWidth=2;ctx.stroke();ctx.save();ctx.translate(cx,cy);ctx.rotate(s+sa/2);ctx.textAlign='right';ctx.font="bold 14px 'Noto Sans JP'";ctx.fillStyle='#0D0A1E';ctx.textBaseline='middle';ctx.fillText(item.label,R-16,0);ctx.restore();});const cg=ctx.createRadialGradient(cx,cy,0,cx,cy,28);cg.addColorStop(0,'#c084fc');cg.addColorStop(1,'#7c3aed');ctx.beginPath();ctx.arc(cx,cy,26,0,Math.PI*2);ctx.fillStyle=cg;ctx.fill();ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=2;ctx.stroke();ctx.save();ctx.font="18px serif";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff';ctx.fillText('★',cx,cy);ctx.restore();ctx.save();ctx.translate(cx,cy-R-14);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-9,-17);ctx.lineTo(9,-17);ctx.closePath();ctx.fillStyle='#c084fc';ctx.shadowColor='#c084fc';ctx.shadowBlur=12;ctx.fill();ctx.restore();}
+function frameRoulette(p){drawBg();drawHeader('運勢ルーレット');const e=1-Math.pow(1-p,4);drawWheel(wheelTarget*e);if(p>0.88&&wheelResult){const a=Math.min((p-0.88)/0.12,1);ctx.save();ctx.globalAlpha=a;ctx.fillStyle='rgba(155,92,246,0.2)';rr(ctx,W/2-120,H-200,240,70,16);ctx.fill();ctx.strokeStyle=wheelResult.color;ctx.lineWidth=2;rr(ctx,W/2-120,H-200,240,70,16);ctx.stroke();gtxt(wheelResult.label,W/2,H-165,30,wheelResult.color);txt('今日のあなたの運勢',W/2,H-138,12,'rgba(255,255,255,0.5)');ctx.restore();}drawFooter();}
+function frameNumber(p){drawBg();drawHeader('ラッキーナンバー');const cx=W/2,cy=H/2-10,bw=96,bh=96,gap=14,totalW=bw*3+gap*2,sx=cx-totalW/2;for(let i=0;i<3;i++){const bx=sx+i*(bw+gap),by=cy-bh/2,locked=p>(0.45+i*0.18);ctx.save();ctx.shadowColor=locked?'#F5C842':'#9B5CF6';ctx.shadowBlur=locked?22:8;ctx.fillStyle=locked?'rgba(245,200,66,0.1)':'rgba(155,92,246,0.12)';rr(ctx,bx,by,bw,bh,14);ctx.fill();ctx.strokeStyle=locked?'rgba(245,200,66,0.6)':'rgba(155,92,246,0.35)';ctx.lineWidth=2;rr(ctx,bx,by,bw,bh,14);ctx.stroke();ctx.restore();const num=locked?String(numberPicks[i]).padStart(2,'0'):String(LUCKY[Math.floor(Math.random()*LUCKY.length)]).padStart(2,'0');ctx.save();ctx.font="900 36px 'Courier New',monospace";ctx.fillStyle=locked?'#F5C842':'#c084fc';ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor=locked?'#F5C842':'#9B5CF6';ctx.shadowBlur=10;ctx.fillText(num,bx+bw/2,cy);ctx.restore();}if(p>0.84){const a=Math.min((p-0.84)/0.16,1),msgs=['この数字があなたの縁を結ぶ','あの人との距離を縮める鍵','宇宙があなたに贈る数字'],msg=msgs[(numberPicks[0]||0)%msgs.length];ctx.save();ctx.globalAlpha=a;ctx.fillStyle='rgba(245,200,66,0.1)';rr(ctx,W/2-150,H/2+72,300,52,14);ctx.fill();ctx.strokeStyle='rgba(245,200,66,0.4)';ctx.lineWidth=1;rr(ctx,W/2-150,H/2+72,300,52,14);ctx.stroke();txt(msg,W/2,H/2+98,13,'rgba(245,200,66,0.9)');ctx.restore();}drawFooter();}
+function frameCBack(cx,cy,cw,ch){ctx.fillStyle='#1e1b4b';rr(ctx,cx-cw/2,cy-ch/2,cw,ch,16);ctx.fill();ctx.strokeStyle='rgba(155,92,246,0.5)';ctx.lineWidth=2;rr(ctx,cx-cw/2,cy-ch/2,cw,ch,16);ctx.stroke();ctx.fillStyle='rgba(155,92,246,0.15)';rr(ctx,cx-cw/2+12,cy-ch/2+12,cw-24,ch-24,10);ctx.fill();ctx.font='28px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='rgba(192,132,252,0.35)';ctx.fillText('✦',cx,cy);}
+function frameCFront(cx,cy,cw,ch,card){const g=ctx.createLinearGradient(cx-cw/2,cy-ch/2,cx+cw/2,cy+ch/2);g.addColorStop(0,'#1a0f3c');g.addColorStop(1,'#0D0A1E');ctx.fillStyle=g;rr(ctx,cx-cw/2,cy-ch/2,cw,ch,16);ctx.fill();ctx.strokeStyle=card.color+'70';ctx.lineWidth=2;rr(ctx,cx-cw/2,cy-ch/2,cw,ch,16);ctx.stroke();ctx.font="10px 'Noto Sans JP'";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillText(card.en,cx,cy-ch/2+22);ctx.font='48px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(card.emoji,cx,cy-24);ctx.save();ctx.font="bold 21px 'Shippori Mincho',serif";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=card.color;ctx.shadowColor=card.color;ctx.shadowBlur=14;ctx.fillText(card.name,cx,cy+50);ctx.restore();}
+function frameTarot(p){drawBg();drawHeader('タロットリーディング');const cx=W/2,cy=H/2-20,cw=170,ch=268;for(let i=0;i<6;i++){const t=((p*2+i*0.6)%1),px=cx+Math.cos(i*Math.PI/3)*100*t,py=cy+Math.sin(i*Math.PI/3)*140*t;ctx.beginPath();ctx.arc(px,py,3*(1-t),0,Math.PI*2);ctx.fillStyle=`rgba(245,200,66,${0.5*(1-t)})`;ctx.fill();}if(p<0.38){const w=Math.sin(p*Math.PI*8)*0.06;ctx.save();ctx.translate(cx,cy);ctx.rotate(w);frameCBack(0,0,cw,ch);ctx.restore();}else if(p<0.62){const fp=(p-0.38)/0.24,sx=Math.cos(fp*Math.PI);ctx.save();ctx.translate(cx,cy);ctx.scale(sx,1);if(fp<0.5)frameCBack(0,0,cw,ch);else frameCFront(0,0,cw,ch,tarotCard);ctx.restore();}else{ctx.save();ctx.shadowColor=tarotCard.color;ctx.shadowBlur=30;frameCFront(cx,cy,cw,ch,tarotCard);ctx.restore();if(p>0.8){const a=Math.min((p-0.8)/0.2,1),ly=cy+ch/2+38;ctx.save();ctx.globalAlpha=a;ctx.strokeStyle='rgba(255,255,255,0.12)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx-100,ly);ctx.lineTo(cx+100,ly);ctx.stroke();txt(tarotCard.meaning,cx,ly+24,12,'rgba(255,255,255,0.55)');ctx.restore();}}drawFooter();}
+function renderFrame(p){if(currentTab==='roulette')frameRoulette(p);else if(currentTab==='number')frameNumber(p);else frameTarot(p);}
+function setupState(){if(currentTab==='roulette'){wheelTarget=(5+Math.random()*5)*2*Math.PI;wheelResult=ITEMS[Math.floor(Math.random()*ITEMS.length)];}else if(currentTab==='number'){numberPicks=[0,1,2].map(()=>LUCKY[Math.floor(Math.random()*LUCKY.length)]);}else{tarotCard=TAROT[Math.floor(Math.random()*TAROT.length)];}}
+function drawIdle(){drawBg();ctx.save();ctx.globalAlpha=0.4;gtxt({roulette:'運勢ルーレット',number:'ラッキーナンバー',tarot:'タロット'}[currentTab],W/2,H/2,22,'#9B5CF6');txt('▶ プレビュー再生',W/2,H/2+44,13,'rgba(255,255,255,0.3)');ctx.restore();}
+function playAnim(){if(isPlaying)return;if(animFrame)cancelAnimationFrame(animFrame);isPlaying=true;animStartTime=null;document.getElementById('playBtn').disabled=true;document.getElementById('exportBtn').disabled=true;setStatus('再生中...','rec');setupState();function loop(ts){if(!animStartTime)animStartTime=ts;const p=Math.min((ts-animStartTime)/ANIM_DURATION,1);renderFrame(p);if(p<1){animFrame=requestAnimationFrame(loop);}else{isPlaying=false;document.getElementById('playBtn').disabled=false;document.getElementById('exportBtn').disabled=false;setStatus('再生完了 ✦ 「動画を保存」でMP4をエクスポートできます','done');}}animFrame=requestAnimationFrame(loop);}
+async function exportVideo(){if(!ffmpegReady||isPlaying)return;document.getElementById('exportBtn').disabled=true;document.getElementById('playBtn').disabled=true;setStatus('フレームを生成中...','rec');setupState();const totalFrames=Math.ceil(ANIM_DURATION/1000*FPS);const pb=document.getElementById('progressBar');try{for(let i=0;i<totalFrames;i++){const p=i/(totalFrames-1);renderFrame(p);const blob=await new Promise(res=>canvas.toBlob(res,'image/png'));const buf=await blob.arrayBuffer();const fname=`frame${String(i).padStart(4,'0')}.png`;await ffmpeg.writeFile(fname,new Uint8Array(buf));pb.style.width=(i/totalFrames*60)+'%';if(i%5===0)setStatus(`フレーム生成中... ${i}/${totalFrames}`,'rec');await new Promise(r=>setTimeout(r,0));}setStatus('動画を変換中...','rec');pb.style.width='70%';await ffmpeg.exec(['-framerate',String(FPS),'-i','frame%04d.png','-c:v','libx264','-pix_fmt','yuv420p','-preset','fast','-crf','23','output.mp4']);pb.style.width='90%';const data=await ffmpeg.readFile('output.mp4');const blob=new Blob([data.buffer],{type:'video/mp4'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`uranai-${currentTab}-${Date.now()}.mp4`;a.click();URL.revokeObjectURL(url);for(let i=0;i<totalFrames;i++){try{await ffmpeg.deleteFile(`frame${String(i).padStart(4,'0')}.png`);}catch(e){}}try{await ffmpeg.deleteFile('output.mp4');}catch(e){}pb.style.width='100%';setStatus('✦ MP4ダウンロード完了！','done');setTimeout(()=>{pb.style.width='0%';},3000);}catch(e){setStatus('エラー: '+e.message,'err');pb.style.width='0%';}document.getElementById('playBtn').disabled=false;document.getElementById('exportBtn').disabled=false;}
+function switchTab(tab){if(isPlaying)return;currentTab=tab;document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['roulette','number','tarot'][i]===tab);});document.getElementById('exportBtn').disabled=true;drawIdle();setStatus('プレビューを再生してください');}
+function setStatus(msg,type=''){const el=document.getElementById('statusBar');el.textContent=msg;el.className='status-bar'+(type?' '+type:'');}
+window.switchTab=switchTab;window.playAnim=playAnim;window.exportVideo=exportVideo;
+</script>
+</body>
+</html>
